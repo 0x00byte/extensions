@@ -83,7 +83,7 @@ class BurpExtender(IBurpExtender, IContextMenuFactory):
         for word in words:
 
             # filter out long strings
-            if len(word) <= 12:
+            if len(word) <= 20:
                 self.wordlist.add(word.lower())
 
         return
