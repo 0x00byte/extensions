@@ -10,97 +10,102 @@ from datetime import datetime
 from HTMLParser import HTMLParser
 
 class TagStripper(HTMLParser):
-	def __init__(self):
-		HTMLParser.__init__(self)
-		self.page_text = []
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.page_text = []
 
-	def handle_data(self, data):
-		self.page_text.append(data)
+    def handle_data(self, data):
+        self.page_text.append(data)
 
-	def handle_comment(self, data):
-		self.handle_data(data)
+    def handle_comment(self, data):
+        self.handle_data(data)
 
-	def strip(self, html):
-		self.feed(html)
-		return " ".join(self.page_text)
+    def strip(self, html):
+        self.feed(html)
+        return " ".join(self.page_text)
 
 class BurpExtender(IBurpExtender, IContextMenuFactory):
-	def registerExtenderCallbacks(self, callbacks):
-		self._callbacks = callbacks
-		self._helpers = callbacks.getHelpers()
-		self.context = None
-		self.hosts = set()
+    def registerExtenderCallbacks(self, callbacks):
+        self._callbacks = callbacks
+        self._helpers   = callbacks.getHelpers()
+        self.context    = None
+        self.hosts      = set()
 
-		self.wordlist = set(["password"])
+        # start with something we know is common
+        self.wordlist   = set(["password"])
 
-		callbacks.setExtensionName("0x00 Wordlist")
-		callbacks.registerContextMenuFactory(self)
+        # we set up our extension
+        callbacks.setExtensionName("BHP Wordlist")
+        callbacks.registerContextMenuFactory(self)
 
-		return
+        return
 
-	def createMenuItems(self, context_menu):
-		self.context = context_menu
-		menu_list = ArrayList()
-		menu_list.add(JMenuItem("Create Wordlist", actionPerformed=self.wordlist_menu))
+    def createMenuItems(self, context_menu):
+        self.context = context_menu
+        menu_list = ArrayList()
+        menu_list.add(JMenuItem("Create Wordlist", \
+            actionPerformed=self.wordlist_menu))
 
-		return menu_list
+        return menu_list
 
-	def wordlist_menu(self, event):
+    def wordlist_menu(self,event):
 
-		http_traffic = self.context.getSelectedMessages()
+        # grab the details of what the user clicked
+        http_traffic = self.context.getSelectedMessages()
 
-		for traffic in http_traffic:
-			http_service = traffic.getHttpService()
-			host = http_service.getHost()
+        for traffic in http_traffic:
+            http_service  = traffic.getHttpService()
+            host          = http_service.getHost()
 
-			self.hosts.add(host)
+            self.hosts.add(host)            
 
-			http_response = traffic.getResponse()
+            http_response = traffic.getResponse()
 
-			if http_response:
-				self.get_words(http_response)
+            if http_response:
+                self.get_words(http_response)
 
-		self.display_wordlist()
-		return
+        self.display_wordlist()
+        return
 
-	def get_words(self, http_response):
+    def get_words(self, http_response):
 
-		headers, body = http_response.tostring().split('\r\n\r\n', 1)
+        headers, body = http_response.tostring().split('\r\n\r\n', 1)
 
-		if headers.lower().find("content-type: text") == -1:
-			return
+        # skip non-text responses
+        if headers.lower().find("content-type: text") == -1:
+            return
 
-		tag_stripper = TagStripper()
-		page_text = tag_stripper.strip(body)
-		words = re.findall("[a-zA-Z]\w{2,}", page_text)
+        tag_stripper = TagStripper()
+        page_text = tag_stripper.strip(body)
 
-		for word in words:
+        words = re.findall("[a-zA-Z]\w{2,}", page_text)
 
-			if len(word) <= 15:
-				self.wordlist.add(word.lower())
+        for word in words:
 
-		return
+            # filter out long strings
+            if len(word) <= 12:
+                self.wordlist.add(word.lower())
 
-	def mangle(self, word):
-		year = datetime.now().year
-		suffixes = ["", "1", "!", year, "123", "123456", "2012", "2013", "2014", "22", "!!!"]
-		mangled = []
+        return
 
-		for password in (word, word.capitalize()):
-			for suffix in suffixes:
-				mangled.append("%s%s" % (password, suffix))
+    def mangle(self, word):
+        year     = datetime.now().year
+        suffixes = ["", "1", "!", year]
+        mangled  = []
 
-		return mangled
+        for password in (word, word.capitalize()):
+            for suffix in suffixes:
+                mangled.append("%s%s" % (password, suffix))
 
-	def display_wordlist(self):
-		print "#!comment: Wordlist for site(s) %s" % ", ".join(self.hosts)
+        return mangled
 
-		for word in sorted(self.wordlist):
-			for password in self.mangle(word):
-				print password
+    def display_wordlist(self):
 
-			return
+        print "# BHP Wordlist for site(s) %s" % \
+            ", ".join(self.hosts)
+        for word in sorted(self.wordlist):
+            for password in self.mangle(word):
+                print password
 
-
-
+        return
 
